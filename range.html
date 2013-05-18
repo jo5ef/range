@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+		<style type="text/css">
+			html { height: 100% }
+			body { height: 100%; margin: 0; padding: 0 }
+			#map-canvas { height: 100% }
+		</style>
+		<script type="text/javascript"
+			src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCUIGQE3F4m2cSMz--Sn7SRCHsBw1sy68M&sensor=false&libraries=geometry">
+		</script>
+		<script type="text/javascript">
+
+			var loav = new google.maps.LatLng(47.9680, 16.2591);
+
+			function initialize() {
+				var mapOptions = {
+					center: loav,
+					zoom: 6,
+					mapTypeId: google.maps.MapTypeId.ROADMAP
+				};
+				
+				var map = new google.maps.Map(document.getElementById("map-canvas"), mapOptions);
+
+				var rangeCtrlDiv = document.createElement('div');
+				var rangeCtrl = new RangeControl(map, rangeCtrlDiv);
+
+				rangeCtrlDiv.index = 1;
+				map.controls[google.maps.ControlPosition.RIGHT_TOP].push(rangeCtrlDiv);
+			};
+
+			function RangeControl(map, div) {
+
+				var controlDiv = div;
+				var control = this;
+				controlDiv.style.padding = '5px';
+			
+				var d = document.getElementById('range-control');
+				var cruiseInput = document.getElementById('cruise');
+				var enduranceInput = document.getElementById('endurance');
+				controlDiv.appendChild(d);
+
+				var rangeWidget = new RangeWidget(map, loav, cruiseInput.value, enduranceInput.value);
+				google.maps.event.addDomListener(cruiseInput, 'input', function() {
+					rangeWidget.set('cruise', cruiseInput.value);
+				});
+				google.maps.event.addDomListener(enduranceInput, 'input', function() {
+					rangeWidget.set('endurance', enduranceInput.value);
+				});
+			};
+
+			function RangeWidget(map, position, cruise, endurance) {
+
+				var that = this;
+
+				this.set('map', map);
+				this.set('position', position);
+				this.set('cruise', cruise);
+				this.set('endurance', endurance);
+				this.set('rings', new Array());
+
+				var airplane = new google.maps.Marker({
+					draggable: true
+				});
+
+				airplane.bindTo('map', this);
+				airplane.bindTo('position', this);
+
+				var range = new google.maps.Circle({
+					strokeColor: RangeWidget.COLOR,
+					strokeOpacity: 0.75,
+					strokeWeight: 2,
+					fillColor: RangeWidget.COLOR,
+					fillOpacity: 0.25,
+				});
+
+				range.bindTo('map', this);
+				range.bindTo('center', this, 'position');
+				range.bindTo('radius', this);
+
+				var rings = [];
+
+				var setupRings = function() {
+					for(var i = 0; i < rings.length; i++) {
+						rings[i].unbindAll();
+						rings[i].setMap(null);
+					}
+					rings.length = 0;
+
+					for(var i = 0; i < that.get('endurance') / RangeWidget.INTERVAL; i++) {
+						var r = new google.maps.Circle({
+							strokeColor: RangeWidget.COLOR,
+							strokeOpacity: 0.75,
+							strokeWeight: 1 + i % 2,
+							fillColor: RangeWidget.COLOR,
+							fillOpacity: 0,
+						});
+						r.bindTo('map', that);
+						r.bindTo('center', that, 'position');
+						rings.push(r);
+					}
+				};
+
+				var resizeRings = function() {
+					for(var i = 0; i < rings.length; i++) {
+						rings[i].set('radius', that.get('cruise') * (i + 1) * RangeWidget.INTERVAL * 1852);
+					}
+				};
+
+				/*
+				var p = google.maps.geometry.spherical.computeOffset(this.get('position'),
+					this.get('cruise') * 1852, 270);
+
+				var label = new TextOverlay(map, p, '1hr');
+				*/
+
+				this.cruise_changed = function() {
+					this.set('radius', this.get('cruise') * this.get('endurance') * 1852);
+					resizeRings();
+				};
+				
+				this.endurance_changed = function() {
+					this.set('radius', this.get('cruise') * this.get('endurance') * 1852);
+					setupRings();
+					resizeRings();	
+				};
+
+				this.notify('endurance');
+			};
+
+			RangeWidget.INTERVAL = 0.5;
+			RangeWidget.COLOR = '#6AA7D2';
+			RangeWidget.prototype = new google.maps.MVCObject();
+
+
+			function TextOverlay(map, position, text) {
+				
+				var div = null;
+				
+				this.onAdd = function() {
+					div = document.createElement('div');
+					div.innerHTML = text;
+					div.style.position = 'absolute';
+					var panes = this.getPanes();
+					panes.overlayLayer.appendChild(div);
+				};
+
+				this.draw = function() {
+					if(div) {
+						var overlayProjection = this.getProjection();
+						var pos = overlayProjection.fromLatLngToDivPixel(position);
+						div.style.left = pos.x + 'px';
+						div.style.top= pos.y + 'px';	
+					}
+				};
+
+				this.onRemove = function() {
+					div.parentNode.removeChild(div);
+					div = null;
+				};
+
+				this.setMap(map);
+			};
+
+			TextOverlay.prototype = new google.maps.OverlayView();
+		
+			google.maps.event.addDomListener(window, 'load', initialize);
+		</script>
+	</head>
+	<body>
+		<style>
+			#range-control {
+				background: #FFF;
+				border: 1px solid rgb(113, 123, 135);
+				padding: 2px;
+				font-family: Arial, sans-serif;
+				font-size: 13px;
+				box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 4px;
+			}
+
+			#range-control input {
+				width: 50px;
+			}
+		</style>
+		<div id="range-control">
+			<table>
+				<tr>
+					<td>Cruise</td>
+					<td><input id="cruise" type="number" value="95"/></td>
+					<td>kts</td>
+				</tr>
+				<tr>
+					<td>Endurance</td>
+					<td><input id="endurance" type="number" value="3"/></td>
+					<td>hrs</td>
+				</tr>
+			</table>
+		</div>
+		<div id="map-canvas"/>
+	</body>
+</html>
