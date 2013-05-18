@@ -8,7 +8,7 @@
 			#map-canvas { height: 100% }
 		</style>
 		<script type="text/javascript"
-			src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCUIGQE3F4m2cSMz--Sn7SRCHsBw1sy68M&sensor=false&libraries=geometry">
+			src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDU-c0jl18cj96pVjUEKZLiNDRs3gEgn6o&sensor=false&libraries=geometry">
 		</script>
 		<script type="text/javascript">
 
@@ -80,6 +80,7 @@
 				range.bindTo('radius', this);
 
 				var rings = [];
+				var labels = [];
 
 				var setupRings = function() {
 					for(var i = 0; i < rings.length; i++) {
@@ -87,6 +88,12 @@
 						rings[i].setMap(null);
 					}
 					rings.length = 0;
+
+					for(var i = 0; i < labels.length; i++) {
+						labels[i].unbindAll();
+						labels[i].setMap(null);
+					}
+					labels.length = 0;
 
 					for(var i = 0; i < that.get('endurance') / RangeWidget.INTERVAL; i++) {
 						var r = new google.maps.Circle({
@@ -99,6 +106,11 @@
 						r.bindTo('map', that);
 						r.bindTo('center', that, 'position');
 						rings.push(r);
+
+						if(i % 2 == 0) {
+							var l = new TextOverlay(map, that.get('position'), (i / 2 + 1) + 'h');
+							labels.push(l);
+						}
 					}
 				};
 
@@ -108,22 +120,30 @@
 					}
 				};
 
-				/*
-				var p = google.maps.geometry.spherical.computeOffset(this.get('position'),
-					this.get('cruise') * 1852, 270);
+				var placeLabels = function() {
+					for(var i = 0; i < labels.length; i++) {
+						var p = google.maps.geometry.spherical.computeOffset(
+							that.get('position'), that.get('cruise') * (i + 1) * 1852, 135);
+						labels[i].set('position', p);
+						labels[i].draw();
+					}
+				};
 
-				var label = new TextOverlay(map, p, '1hr');
-				*/
+				this.position_changed = function() {
+					placeLabels();
+				};
 
 				this.cruise_changed = function() {
 					this.set('radius', this.get('cruise') * this.get('endurance') * 1852);
 					resizeRings();
+					placeLabels();
 				};
 				
 				this.endurance_changed = function() {
 					this.set('radius', this.get('cruise') * this.get('endurance') * 1852);
 					setupRings();
-					resizeRings();	
+					resizeRings();
+					placeLabels();	
 				};
 
 				this.notify('endurance');
@@ -135,22 +155,25 @@
 
 
 			function TextOverlay(map, position, text) {
-				
+			
+				var that = this;	
 				var div = null;
+				this.set('position', position);
 				
 				this.onAdd = function() {
 					div = document.createElement('div');
 					div.innerHTML = text;
+					div.className = 'hourlabel';
 					div.style.position = 'absolute';
 					var panes = this.getPanes();
-					panes.overlayLayer.appendChild(div);
+					panes.overlayImage.appendChild(div);
 				};
 
 				this.draw = function() {
 					if(div) {
 						var overlayProjection = this.getProjection();
-						var pos = overlayProjection.fromLatLngToDivPixel(position);
-						div.style.left = pos.x + 'px';
+						var pos = overlayProjection.fromLatLngToDivPixel(that.get('position'));
+						div.style.left = (pos.x - 10) + 'px';
 						div.style.top= pos.y + 'px';	
 					}
 				};
@@ -181,6 +204,17 @@
 
 			#range-control input {
 				width: 50px;
+			}
+
+			.hourlabel {
+				background: #FFF;
+				display: block;
+				width: 15px;
+				font-size: 10px;
+				font-family: Arial, sans-serif;
+				padding: 1px;
+				border: 1px solid #888;
+				text-align: center;
 			}
 		</style>
 		<div id="range-control">
